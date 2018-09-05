@@ -1,0 +1,4 @@
+﻿otazka5;a;b;c;d
+otazka6;e;f;g;h
+otazka7;i;j;k;l
+otazka8;m;n;o;p

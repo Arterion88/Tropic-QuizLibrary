@@ -6,7 +6,9 @@ using System.Linq;
 using System.Reflection;
 using System.Resources;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
+using EmbeddedResourceHelper;
 
 namespace QuizLibrary
 {
@@ -71,34 +73,51 @@ namespace QuizLibrary
         }
     }
 
-    public struct Question2
+    [Serializable]
+    public class Question2
     {
+        #region Properties
         public int Id { get; set; }
 
         private readonly string testName;
 
         public string Prompt { get; set; }
 
-        public string PromptImage { get { return String.Format("{0}.Images.{1}_0", testName, Id); } }
-
         public int CorrectAnswer { get; set; }
+        public int UserAnswer { get; set; }
+        public bool IsCorrect { get { return CorrectAnswer == UserAnswer; } }
 
         public List<Answer> Answers { get; set; }
+        #endregion
 
-        public Question2(int id,string testName, string question,int correctAnswer)
+        #region Constructors
+
+        public Question2()
+        {
+
+        }
+
+        public Question2(int id, string testName, string question, int correctAnswer)
         {
             Id = id;
             string[] items = question.Split(';');
             Prompt = items[0];
             CorrectAnswer = correctAnswer;
+            UserAnswer = -1;
             this.testName = testName;
             Answers = new List<Answer>();
-            for (int i = 0; i < items.Length; i++)
-                Answers.Add(new Answer() { Text = items[i], Image= String.Format("{0}.Images.{1}_{2}", testName, Id,i+1) });
-        }                   
+            for (int i = 1; i < items.Length; i += 2)
+                Answers.Add(new Answer(items[i], items[i + 1]));
+        }
 
-        public struct Answer
+        #endregion
+
+        [Serializable]
+        public class Answer
         {
+            #region Properties and Variables
+
+            #region AnswerType
             public enum AnswerType
             {
                 Button, Image, ImageButton, None
@@ -106,83 +125,45 @@ namespace QuizLibrary
 
             public AnswerType GetAnswerType
             {
-                get
-                {
-                    AnswerType result;
-                    result = 
-                        (Text == "")
-                        ?
-                        (ImageExists) ? AnswerType.Image : AnswerType.None
-                        :
-                        (ImageExists) ? AnswerType.ImageButton : AnswerType.Button;
-                    return result;
-                }
+                get { return Text == "" ? (ImageExists ? AnswerType.Image : AnswerType.None) : (ImageExists ? AnswerType.ImageButton : AnswerType.Button); }
             }
-
-
+            #endregion
 
             public string Text { get; set; }
-            public string Image { get; set; }
 
-            public bool ImageExists {
+            private readonly string _image;
+            public Uri Image {
                 get
                 {
-                    return false; //TODO:Implement Image Exist Check
+                    if (_image == string.Empty)
+                        return null;
+
+                    if (!ImageExists)
+                        return new Uri(string.Format("pack://application:,,,/QuizLibrary;Component/{0}/{1}", Test.ImageFolder, "not-found.png"), UriKind.RelativeOrAbsolute);
+
+                    return new Uri(string.Format("pack://application:,,,/QuizLibrary;Component/{0}/{1}", Test.ImageFolder,_image),UriKind.RelativeOrAbsolute);
                 }
             }
-        }
-    }
 
-    public class Test
-    {
-        public string Name { get; set; }
+            public bool ImageExists => Assembly.GetExecutingAssembly().GetManifestResourceNames().Contains("/"+Test.ImageFolder+"/" +_image);
 
-        /// <summary>
-        /// Index is language code (cs,en...)
-        /// </summary>
-        public Dictionary<string, List<Question2>> Questions { get; set; }
+            public int CorrectAnswerIndex { get; set; }
+            #endregion
 
-        public Test(string testName)
-        {
-
-            foreach (string fileName in GetAllTxt(testName))
-            {
-                if (fileName == "answers")
+            #region Constructors
+                public Answer()
                 {
-                    //TODO: Load correct answers from file
-                    continue;
+
                 }
-                Console.WriteLine(fileName.Split('.')[3]);
-
-                Questions.Add(fileName.Split('.')[3], GetQuestionFromTxt(fileName));
-            }
-            Console.ReadKey();
-        }
-        
-        public List<Question2> GetQuestionFromTxt(string fileName)
-        {
-            List<Question2> questions = new List<Question2>();
-            int index =0;
-            var lines = File.ReadLines(fileName);
-            foreach (var line in lines)
-            {
-                questions.Add(new Question2(index,Name,line,0)); //TODO:Implement correct answer
-                index++;
-            }
-
-                return questions;
-        }
-
-        private string[] GetAllTxt(string testName)
-        {
-            var executingAssembly = Assembly.GetExecutingAssembly();
-            string folderName = string.Format("{0}.Tests.{1}", executingAssembly.GetName().Name, testName);
-            return executingAssembly
-                .GetManifestResourceNames()
-                .Where(r => r.StartsWith(folderName) && r.EndsWith(".txt"))
-                //.Select(r => r.Substring(constantResName.Length + 1))
-                .ToArray();
+                public Answer(string text, string image)
+                {
+                    this.Text = text;
+                    this._image = image;
+                }
+            #endregion            
         }
     }
+
+    
 
 }
